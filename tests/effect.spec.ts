@@ -4,7 +4,7 @@ import { reactive } from '../src/reactive'
 describe('effect', () => {
   it('effect test', () => {
     const user = reactive({
-      age: 10,
+      age: 10
     })
 
     let nextAge
@@ -90,7 +90,7 @@ describe('effect', () => {
         dummy = obj.prop
       },
       {
-        onStop,
+        onStop
       }
     )
 
