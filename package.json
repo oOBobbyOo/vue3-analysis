@@ -1,21 +1,24 @@
 {
   "name": "vue3-analysis",
   "version": "1.0.0",
-  "description": "",
+  "description": "vue3-analysis",
   "main": "index.js",
   "scripts": {
-    "dev": "node scripts/dev.js reactivity",
+    "dev": "node scripts/dev.js reactivity -f global",
     "test": "jest"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@babel/core": "^7.18.10",
     "@babel/preset-env": "^7.18.10",
     "@babel/preset-typescript": "^7.18.6",
+    "@esbuild-plugins/node-modules-polyfill": "^0.1.4",
     "@types/jest": "^28.1.7",
     "babel-jest": "^28.1.3",
+    "esbuild": "^0.15.5",
+    "execa": "^6.1.0",
     "jest": "^28.1.3",
     "minimist": "^1.2.6",
     "typescript": "^4.7.4"

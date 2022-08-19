@@ -1,0 +1,23 @@
+{
+  "name": "@vue/reactivity",
+  "description": "@vue/reactivity",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "sideEffects": false,
+  "buildOptions": {
+    "name": "VueReactivity",
+    "formats": [
+      "esm-bundler",
+      "esm-browser",
+      "cjs",
+      "global"
+    ]
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@vue/shared": "3.2.37"
+  }
+}
