@@ -23,4 +23,17 @@ describe('reactivity/reactive', () => {
     const observed = reactive(original)
     expect(isReactive(observed.nested)).toBe(true)
   })
+
+  test('observed value should proxy mutations to original (Object)', () => {
+    const original: any = { foo: 1 }
+    const observed = reactive(original)
+    // set
+    observed.bar = 1
+    expect(observed.bar).toBe(1)
+    expect(original.bar).toBe(1)
+    // delete
+    delete observed.foo
+    expect('foo' in observed).toBe(false)
+    expect('foo' in original).toBe(false)
+  })
 })
