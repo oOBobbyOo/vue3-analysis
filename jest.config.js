@@ -1,4 +1,5 @@
 module.exports = {
+  preset: 'ts-jest',
   globals: {
     __DEV__: true,
     __TEST__: true,
@@ -9,7 +10,13 @@ module.exports = {
     __ESM_BROWSER__: false,
     __NODE_JS__: true,
     __FEATURE_OPTIONS_API__: true,
-    __FEATURE_SUSPENSE__: true
+    __FEATURE_SUSPENSE__: true,
+    'ts-jest': {
+      tsconfig: {
+        target: 'esnext',
+        sourceMap: true
+      }
+    }
   },
   coverageDirectory: 'coverage',
   collectCoverageFrom: ['packages/*/src/**/*.ts'],

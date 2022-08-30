@@ -1,4 +1,4 @@
-import { reactive, effect, stop } from '../src'
+import { reactive, effect } from '../src'
 
 describe('reactivity/effect', () => {
   it('should observe basic properties', () => {

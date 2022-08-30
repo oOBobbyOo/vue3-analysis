@@ -86,6 +86,12 @@ function createReactiveObject(target: Target, isReadonly: boolean, proxyMap: Wea
   // 代理
   const proxy = new Proxy(target, {
     get(target, key) {
+      if (key === ReactiveFlags.IS_REACTIVE) {
+        return !isReadonly
+      } else if (key === ReactiveFlags.IS_READONLY) {
+        return isReadonly
+      }
+
       const res = Reflect.get(target, key)
 
       // TODO: 依赖收集

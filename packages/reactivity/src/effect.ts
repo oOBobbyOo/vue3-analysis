@@ -9,6 +9,8 @@ export type EffectScheduler = (...args: any[]) => any
 export let activeEffect: ReactiveEffect | undefined
 
 export function track(target, key) {
+  if (!activeEffect) return
+
   let depsMap = targetMap.get(key)
   if (!depsMap) {
     targetMap.set(target, (depsMap = new Map()))
@@ -44,6 +46,7 @@ class ReactiveEffect<T = any> {
   private _fn: () => T
   active: boolean = true
   deps: Dep[] = []
+  parent: ReactiveEffect | undefined = undefined
   onStop?: () => void
 
   constructor(fn, public scheduler?: EffectScheduler, onStop?) {
@@ -53,8 +56,26 @@ class ReactiveEffect<T = any> {
   }
 
   run() {
-    activeEffect = this
-    return this._fn()
+    if (!this.active) {
+      return this._fn()
+    }
+
+    let parent: ReactiveEffect | undefined = activeEffect
+    while (parent) {
+      if (parent === this) {
+        return
+      }
+      parent = parent.parent
+    }
+
+    try {
+      this.parent = activeEffect
+      activeEffect = this
+      return this._fn()
+    } finally {
+      activeEffect = this.parent
+      this.parent = undefined
+    }
   }
 
   stop() {
