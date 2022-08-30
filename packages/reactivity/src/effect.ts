@@ -1,4 +1,5 @@
 import { extend } from '@vue/shared'
+import { EffectScope, recordEffectScope } from './effectScope'
 
 type Dep = Set<any>
 type KeyToDepMap = Map<any, Dep>
@@ -9,19 +10,19 @@ export type EffectScheduler = (...args: any[]) => any
 export let activeEffect: ReactiveEffect | undefined
 
 export function track(target, key) {
-  if (!activeEffect) return
-
-  let depsMap = targetMap.get(key)
-  if (!depsMap) {
-    targetMap.set(target, (depsMap = new Map()))
-  }
-  let dep = depsMap.get(key)
-  if (!dep) {
-    depsMap.set(key, (dep = new Set()))
-  }
-  if (!dep.has(activeEffect!)) {
-    dep.add(activeEffect!)
-    activeEffect!.deps.push(dep)
+  if (shouldTrack && activeEffect) {
+    let depsMap = targetMap.get(key)
+    if (!depsMap) {
+      targetMap.set(target, (depsMap = new Map()))
+    }
+    let dep = depsMap.get(key)
+    if (!dep) {
+      depsMap.set(key, (dep = new Set()))
+    }
+    if (!dep.has(activeEffect!)) {
+      dep.add(activeEffect!)
+      activeEffect!.deps.push(dep)
+    }
   }
 }
 
@@ -42,25 +43,33 @@ export function trigger(target, key) {
   }
 }
 
-class ReactiveEffect<T = any> {
-  private _fn: () => T
+export class ReactiveEffect<T = any> {
   active: boolean = true
   deps: Dep[] = []
   parent: ReactiveEffect | undefined = undefined
+  private deferStop?: boolean
   onStop?: () => void
 
-  constructor(fn, public scheduler?: EffectScheduler, onStop?) {
-    this._fn = fn
-    this.scheduler = scheduler
-    this.onStop = onStop
+  constructor(
+    public fn: () => T,
+    public scheduler: EffectScheduler | null = null,
+    scope?: EffectScope
+  ) {
+    // this.fn = fn
+    // this.scheduler = scheduler
+
+    // this.onStop = onStop
+
+    recordEffectScope(this, scope)
   }
 
   run() {
     if (!this.active) {
-      return this._fn()
+      return this.fn()
     }
 
     let parent: ReactiveEffect | undefined = activeEffect
+    let lastShouldTrack = shouldTrack
     while (parent) {
       if (parent === this) {
         return
@@ -71,15 +80,24 @@ class ReactiveEffect<T = any> {
     try {
       this.parent = activeEffect
       activeEffect = this
-      return this._fn()
+      shouldTrack = true
+
+      return this.fn()
     } finally {
       activeEffect = this.parent
+      shouldTrack = lastShouldTrack
       this.parent = undefined
+
+      if (this.deferStop) {
+        this.stop()
+      }
     }
   }
 
   stop() {
-    if (this.active) {
+    if (activeEffect === this) {
+      this.deferStop = true
+    } else if (this.active) {
       cleanupEffect(this)
 
       if (this.onStop) this.onStop()
@@ -107,18 +125,26 @@ export interface ReactiveEffectOptions {
   onStop?: () => void
 }
 
-export function effect<T = any>(fn: () => T, options?: ReactiveEffectOptions) {
+export function effect<T = any>(
+  fn: () => T,
+  options?: ReactiveEffectOptions
+): ReactiveEffectRunner {
+  if ((fn as ReactiveEffectRunner).effect) {
+    fn = (fn as ReactiveEffectRunner).effect.fn
+  }
+
   const _effect = new ReactiveEffect(fn)
 
   if (options) {
     extend(_effect, options)
+    if (options.scope) recordEffectScope(_effect, options.scope)
   }
 
   if (!options || !options.lazy) {
     _effect.run()
   }
 
-  const runner: any = _effect.run.bind(_effect)
+  const runner: any = _effect.run.bind(_effect) as ReactiveEffectRunner
   runner.effect = _effect
 
   return runner
@@ -131,4 +157,22 @@ export interface ReactiveEffectRunner<T = any> {
 
 export function stop(runner: ReactiveEffectRunner) {
   runner.effect.stop()
+}
+
+export let shouldTrack = true
+const trackStack: boolean[] = []
+
+export function pauseTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = false
+}
+
+export function enableTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = true
+}
+
+export function resetTracking() {
+  const last = trackStack.pop()
+  shouldTrack = last === undefined ? true : last
 }
