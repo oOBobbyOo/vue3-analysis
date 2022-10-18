@@ -1,5 +1,6 @@
 import { isObject, toRawType } from '@vue/shared'
-import { track, trigger } from './effect'
+import { mutableHandlers, readonlyHandlers } from './baseHandlers'
+import { mutableCollectionHandlers, readonlyCollectionHandlers } from './collectionHandlers'
 
 export const enum ReactiveFlags {
   SKIP = '__v_skip',
@@ -48,7 +49,13 @@ function getTargetType(value: Target) {
 }
 
 export function readonly<T extends object>(target: T): T {
-  return createReactiveObject(target, true, readonlyMap)
+  return createReactiveObject(
+    target,
+    true,
+    readonlyHandlers,
+    readonlyCollectionHandlers,
+    readonlyMap
+  )
 }
 
 export function reactive(target: object) {
@@ -56,10 +63,23 @@ export function reactive(target: object) {
     return target
   }
 
-  return createReactiveObject(target, false, reactiveMap)
+  return createReactiveObject(
+    target,
+    false,
+    mutableHandlers,
+    mutableCollectionHandlers,
+    reactiveMap
+  )
 }
 
-function createReactiveObject(target: Target, isReadonly: boolean, proxyMap: WeakMap<Target, any>) {
+function createReactiveObject(
+  target: Target,
+  isReadonly: boolean,
+  baseHandlers: ProxyHandler<any>,
+  collectionHandlers: ProxyHandler<any>,
+  proxyMap: WeakMap<Target, any>
+) {
+  // 判断是否对象
   if (!isObject(target)) {
     if (__DEV__) {
       console.warn(`value cannot be made reactive: ${String(target)}`)
@@ -67,11 +87,12 @@ function createReactiveObject(target: Target, isReadonly: boolean, proxyMap: Wea
     return target
   }
 
+  // 对象是否已经代理，直接返回
   if (target[ReactiveFlags.RAW] && !(isReadonly && target[ReactiveFlags.IS_REACTIVE])) {
     return target
   }
 
-  // 缓存
+  // 是否已经代理（缓存优化）
   const existingProxy = proxyMap.get(target)
   if (existingProxy) {
     return existingProxy
@@ -83,43 +104,19 @@ function createReactiveObject(target: Target, isReadonly: boolean, proxyMap: Wea
     return target
   }
 
-  // 代理
-  const proxy = new Proxy(target, {
-    get(target, key) {
-      if (key === ReactiveFlags.IS_REACTIVE) {
-        return !isReadonly
-      } else if (key === ReactiveFlags.IS_READONLY) {
-        return isReadonly
-      }
+  // 进行代理
+  const proxy = new Proxy(
+    target,
+    targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
+  )
 
-      const res = Reflect.get(target, key)
-
-      // TODO: 依赖收集
-      track(target, key)
-
-      // TODO: 处理对象嵌套
-      if (isObject(res)) {
-        return isReadonly ? readonly(res) : reactive(res)
-      }
-
-      return res
-    },
-    set(target, key, value) {
-      const res = Reflect.set(target, key, value)
-
-      // TODO: 触发依赖
-      trigger(target, key)
-
-      return res
-    }
-  })
-
+  // 把创建好的 proxy 给缓存起来
   proxyMap.set(target, proxy)
 
   return proxy
 }
 
-// 是否响应式代理
+// 判断是否响应式代理对象
 export function isReactive(value: unknown): boolean {
   if (isReadonly(value)) {
     return isReactive((value as Target)[ReactiveFlags.RAW])
@@ -127,15 +124,17 @@ export function isReactive(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_REACTIVE])
 }
 
-// 是否只读
+// 判断是否只读
 export function isReadonly(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_READONLY])
 }
 
+// 判断是否只是浅代理
 export function isShallow(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_SHALLOW])
 }
 
+// 是否代理
 export function isProxy(value: unknown): boolean {
   return isReactive(value) || isReadonly(value)
 }
@@ -144,3 +143,11 @@ export function toRaw<T>(observed: T): T {
   const raw = observed && (observed as Target)[ReactiveFlags.RAW]
   return raw ? toRaw(raw) : observed
 }
+
+// 将对象转成响应式对象
+export const toReactive = <T extends unknown>(value: T): T =>
+  isObject(value) ? reactive(value) : value
+
+// 将对象转成只读的
+export const toReadonly = <T extends unknown>(value: T): T =>
+  isObject(value) ? readonly(value as Record<any, any>) : value
