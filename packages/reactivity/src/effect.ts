@@ -1,8 +1,8 @@
-import { extend } from '@vue/shared'
+import { extend, isArray } from '@vue/shared'
+import { createDep, Dep } from './dep'
 import { EffectScope, recordEffectScope } from './effectScope'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 
-type Dep = Set<any>
 type KeyToDepMap = Map<any, Dep>
 const targetMap = new WeakMap<any, KeyToDepMap>()
 
@@ -11,6 +11,7 @@ export type EffectScheduler = (...args: any[]) => any
 export let activeEffect: ReactiveEffect | undefined
 
 export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
+export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
 
 export class ReactiveEffect<T = any> {
   active: boolean = true
@@ -153,12 +154,20 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     }
     let dep = depsMap.get(key)
     if (!dep) {
-      depsMap.set(key, (dep = new Set()))
+      depsMap.set(key, (dep = createDep()))
     }
-    if (!dep.has(activeEffect!)) {
-      dep.add(activeEffect!)
-      activeEffect!.deps.push(dep)
-    }
+
+    trackEffects(dep)
+  }
+}
+
+export function trackEffects(dep: Dep) {
+  let shouldTrack = false
+  shouldTrack = !dep.has(activeEffect!)
+  if (shouldTrack) {
+    // 用 dep 来存放所有的 effect
+    dep.add(activeEffect!)
+    activeEffect!.deps.push(dep)
   }
 }
 
@@ -176,9 +185,27 @@ export function trigger(
     // NOTE: never been tracked
     return
   }
-  const dep = depsMap.get(key)
-  if (!dep) return
-  for (const effect of dep) {
+
+  let deps: (Dep | undefined)[] = []
+
+  if (key !== void 0) {
+    deps.push(depsMap.get(key))
+  }
+
+  const effects: Array<any> = []
+  deps.forEach((dep) => {
+    // 这里解构 dep 得到的是 dep 内部存储的 effect
+    if (dep) {
+      effects.push(...dep)
+    }
+  })
+
+  triggerEffects(createDep(effects))
+}
+
+export function triggerEffects(dep: Dep | ReactiveEffect[]) {
+  const effects = isArray(dep) ? dep : [...dep]
+  for (const effect of effects) {
     if (effect.scheduler) {
       effect.scheduler()
     } else {
