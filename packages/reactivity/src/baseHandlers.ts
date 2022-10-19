@@ -1,4 +1,12 @@
-import { isReadonly, reactive, ReactiveFlags, readonly, Target } from './reactive'
+import {
+  isReadonly,
+  reactive,
+  ReactiveFlags,
+  reactiveMap,
+  readonly,
+  readonlyMap,
+  Target
+} from './reactive'
 import { track, trigger, ITERATE_KEY } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { isObject, hasOwn, isSymbol, isArray } from '@vue/shared'
@@ -16,13 +24,20 @@ const readonlyGet = createGetter(true)
 
 function createGetter(isReadonly = false, shallow = false) {
   return function get(target: Target, key: string | symbol, receiver: object) {
+    const isExistInReactiveMap = () =>
+      key === ReactiveFlags.RAW && receiver === reactiveMap.get(target)
+
+    const isExistInReadonlyMap = () =>
+      key === ReactiveFlags.RAW && receiver === readonlyMap.get(target)
+
     if (key === ReactiveFlags.IS_REACTIVE) {
       return !isReadonly
     } else if (key === ReactiveFlags.IS_READONLY) {
       return isReadonly
     } else if (key === ReactiveFlags.IS_SHALLOW) {
       return shallow
-    } else {
+    } else if (isExistInReactiveMap() || isExistInReadonlyMap()) {
+      return target
     }
 
     const res = Reflect.get(target, key, receiver)
